@@ -79,7 +79,10 @@ from vis_eye_video_overlay import Vis_Eye_Video_Overlay
 from seek_bar import Seek_Bar
 from trim_marks import Trim_Marks
 from video_export_launcher import Video_Export_Launcher
-from offline_surface_tracker import Offline_Surface_Tracker
+#from offline_surface_tracker import Offline_Surface_Tracker
+from video_on_surface_launcher import Video_On_Surface_Launcher #(A)
+from offline_surface_tracker_with_export import Offline_Surface_Tracker_With_Export #(A)
+
 from marker_auto_trim_marks import Marker_Auto_Trim_Marks
 from fixation_detector import Gaze_Position_2D_Fixation_Detector, Pupil_Angle_3D_Fixation_Detector
 from manual_gaze_correction import Manual_Gaze_Correction
@@ -145,8 +148,8 @@ def session(rec_dir):
                           Vis_Watermark, Vis_Eye_Video_Overlay, Vis_Scan_Path], key=lambda x: x.__name__)
 
     analysis_plugins = sorted([Gaze_Position_2D_Fixation_Detector, Pupil_Angle_3D_Fixation_Detector,
-                               Manual_Gaze_Correction, Video_Export_Launcher, Offline_Surface_Tracker,
-                               Raw_Data_Exporter, Batch_Exporter, Annotation_Player], key=lambda x: x.__name__)
+                               Manual_Gaze_Correction, Video_Export_Launcher, Offline_Surface_Tracker_With_Export, Video_On_Surface_Launcher,
+                               Raw_Data_Exporter, Batch_Exporter, Annotation_Player], key=lambda x: x.__name__) #(A)
 
     other_plugins = sorted([Log_History, Marker_Auto_Trim_Marks], key=lambda x: x.__name__)
     user_plugins = sorted(import_runtime_plugins(os.path.join(user_dir, 'plugins')), key=lambda x: x.__name__)
@@ -467,10 +470,6 @@ def session(rec_dir):
         # new positons we make a deepcopy just like the image is a copy.
         events['gaze_positions'] = deepcopy(g_pool.gaze_positions_by_frame[frame.index])
         events['pupil_positions'] = deepcopy(g_pool.pupil_positions_by_frame[frame.index])
-        print(frame.timestamp, frame.index) #(A)
-        
-        #for p in events['pupil_positions']: #(A)
-        #    print(p['timestamp'], p['index']) #(A)
 
         if update_graph:
             # update performace graphs

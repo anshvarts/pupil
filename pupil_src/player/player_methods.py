@@ -59,8 +59,9 @@ def correlate_data(data, timestamps):
             data_index +=1
         else:
             frame_idx+=1
-
+        
     return data_by_frame
+
 
 
 def update_recording_to_recent(rec_dir):

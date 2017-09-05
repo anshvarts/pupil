@@ -47,9 +47,16 @@ from fixation_detector import Pupil_Angle_3D_Fixation_Detector,Gaze_Position_2D_
 class Global_Container(object):
     pass
 
+def find_surface(self): #(A)-needed?
+    self.load_surface_definitions_from_file
+    
+    for s in self.surfaces:
+        if s.name == 'screen':
+            surface=s
+    return surface
 
-def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir, min_data_confidence,
-           start_frame=None, end_frame=None, plugin_initializers=(), out_file_path=None,pupil_data=None):
+def export_surface(should_terminate, frames_to_export, current_frame, rec_dir, user_dir, min_data_confidence,
+           start_frame=None, end_frame=None, plugin_initializers=(), out_file_path=None,pupil_data=None): #(A)
 
     vis_plugins = sorted([Vis_Circle,Vis_Cross,Vis_Polyline,Vis_Light_Points,
         Vis_Watermark,Vis_Scan_Path,Vis_Eye_Video_Overlay], key=lambda x: x.__name__)
@@ -79,14 +86,14 @@ def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir,
 
     # Out file path verification, we do this before but if one uses a seperate tool, this will kick in.
     if out_file_path is None:
-        out_file_path = os.path.join(rec_dir, "world_viz.mp4")
+        out_file_path = os.path.join(rec_dir, "world_viz_surface.mp4") #(A)
     else:
         file_name = os.path.basename(out_file_path)
         dir_name = os.path.dirname(out_file_path)
         if not dir_name:
             dir_name = rec_dir
         if not file_name:
-            file_name = 'world_viz.mp4'
+            file_name = 'world_viz_surface.mp4' #(A)
         out_file_path = os.path.expanduser(os.path.join(dir_name, file_name))
 
     if os.path.isfile(out_file_path):
@@ -112,8 +119,7 @@ def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir,
     logger.debug(exp_info.format(start_frame, start_frame + frames_to_export.value, frames_to_export.value))
 
     # setup of writer
-    fps=(timestamps[end_frame-1]-timestamps[start_frame])/(end_frame-1-start_frame) #(A)
-    writer = AV_Writer(out_file_path, fps=fps, use_timestamps=True) #(A) cap.frame_rate
+    writer = AV_Writer(out_file_path, fps=cap.frame_rate, use_timestamps=True)
 
     cap.seek_to_frame(start_frame)
 

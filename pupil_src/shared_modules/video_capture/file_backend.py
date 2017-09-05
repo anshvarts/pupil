@@ -235,15 +235,17 @@ class File_Source(Base_Source):
     def get_frame(self):
         frame = None
         for frame in self.next_frame:
-            index = self.pts_to_idx(frame.pts)
+            index = self.target_frame_idx #self.pts_to_idx(frame.pts) #(A)
 
             if index == self.target_frame_idx:
                 break
             elif index < self.target_frame_idx:
-                pass
-                # print 'skip frame to seek','now at:',index
+                #pass #(A)
+                print ('skip frame to seek','now at:',index)
+                break #(A)
             else:
-                logger.debug('Frame index not consistent.')
+                print ('Frame index not consistent.')
+                #logger.debug('Frame index not consistent.')
                 break
         if not frame:
             raise EndofVideoFileError('Reached end of videofile')

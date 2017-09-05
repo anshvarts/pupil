@@ -18,6 +18,9 @@ if __name__ == '__main__':
     del syspath, ospath
 
 import os
+import csv #(A)
+
+from copy import deepcopy #(A)
 from time import time
 from glob import glob
 import numpy as np
@@ -48,8 +51,8 @@ class Global_Container(object):
     pass
 
 
-def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir, min_data_confidence,
-           start_frame=None, end_frame=None, plugin_initializers=(), out_file_path=None,pupil_data=None):
+def export_second_gaze(should_terminate, frames_to_export, current_frame, rec_dir, user_dir, min_data_confidence, 
+           start_frame=None, end_frame=None, plugin_initializers=(), out_file_path=None,pupil_data=None): #(A)
 
     vis_plugins = sorted([Vis_Circle,Vis_Cross,Vis_Polyline,Vis_Light_Points,
         Vis_Watermark,Vis_Scan_Path,Vis_Eye_Video_Overlay], key=lambda x: x.__name__)
@@ -68,6 +71,7 @@ def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir,
     video_path = [f for f in glob(os.path.join(rec_dir, "world.*")) if f[-3:] in ('mp4', 'mkv', 'avi')][0]
     timestamps_path = os.path.join(rec_dir, "world_timestamps.npy")
     pupil_data_path = os.path.join(rec_dir, "pupil_data")
+    surface_pupil_data_path = os.path.join(rec_dir, "surface_pupil_data.csv") #(A)
 
     meta_info = load_meta_info(rec_dir)
 
@@ -112,8 +116,7 @@ def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir,
     logger.debug(exp_info.format(start_frame, start_frame + frames_to_export.value, frames_to_export.value))
 
     # setup of writer
-    fps=(timestamps[end_frame-1]-timestamps[start_frame])/(end_frame-1-start_frame) #(A)
-    writer = AV_Writer(out_file_path, fps=fps, use_timestamps=True) #(A) cap.frame_rate
+    writer = AV_Writer(out_file_path, fps=cap.frame_rate, use_timestamps=True)
 
     cap.seek_to_frame(start_frame)
 
@@ -126,11 +129,33 @@ def export(should_terminate, frames_to_export, current_frame, rec_dir, user_dir,
     g_pool.timestamps = timestamps
     g_pool.delayed_notifications = {}
     g_pool.notifications = []
-    # load pupil_positions, gaze_positions
+
+    #load gaze positions on surface from prepeared file surface_pupil_data.csv. row = timestamp, norm_x, norm_y #(A)
+    surface_pupil_file = open(surface_pupil_data_path)
+    surface_pupil_data = []
+    for row in csv.reader(surface_pupil_file):
+        surface_pupil_data.append(row[2:5]) 
+    surface_pupil_file.close()
+
     pupil_data = pupil_data or load_object(pupil_data_path)
     g_pool.pupil_data = pupil_data
+
+    #change original coordinates to coordinates on surface #(A)
+    gaze_list = pupil_data['gaze_positions']
+    surface_gaze_list=[]
+    for stamp in range (0,len(gaze_list)-1):
+        #here is the action is incorrect since all information is lie apart from coordinates and timestamps which we add later
+        surface_gaze_stamp=deepcopy(gaze_list[stamp])
+        #stamp+1 because firs string consist of varaibles names
+        if stamp+1<len(surface_pupil_data):
+            surface_gaze_stamp['norm_pos']=(float (surface_pupil_data[stamp+1][1]), float (surface_pupil_data[stamp+1][2]))
+            surface_gaze_stamp['timestamp']=(float (surface_pupil_data[stamp+1][0]))
+        surface_gaze_list.append(surface_gaze_stamp)
+
+    # load pupil_positions, gaze_positions
+
     g_pool.pupil_positions_by_frame = correlate_data(pupil_data['pupil_positions'], g_pool.timestamps)
-    g_pool.gaze_positions_by_frame = correlate_data(pupil_data['gaze_positions'], g_pool.timestamps)
+    g_pool.gaze_positions_by_frame = correlate_data(surface_gaze_list, g_pool.timestamps)
     g_pool.fixations_by_frame = [[] for x in g_pool.timestamps]  # populated by the fixation detector plugin
 
     # add plugins

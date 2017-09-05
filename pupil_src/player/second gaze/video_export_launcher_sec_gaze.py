@@ -7,6 +7,8 @@ Distributed under the terms of the GNU
 Lesser General Public License (LGPL v3.0).
 See COPYING and COPYING.LESSER for license details.
 ---------------------------------------------------------------------------~(*)
+This version will take on-surface coordinates for the export (uses export_second_gaze instead of export) #(A)
+---------------------------------------------------------------------------~(*)
 '''
 
 from plugin import Plugin
@@ -17,7 +19,7 @@ from pyglui import ui
 import logging
 logger = logging.getLogger(__name__)
 from ctypes import c_bool, c_int
-from exporter import export
+from exporter_second_gaze import export_second_gaze #(A)
 
 class Export_Process(mp.Process):
     """small aditions to the process class"""
@@ -133,9 +135,8 @@ class Video_Export_Launcher(Plugin):
         plugins = self.g_pool.plugins.get_initializers()
 
         out_file_path=verify_out_file_path(self.rec_name,export_dir)
-        process = Export_Process(target=export, args=(should_terminate,frames_to_export,current_frame, rec_dir,user_dir,self.g_pool.min_data_confidence,start_frame,end_frame,plugins,out_file_path,self.g_pool.pupil_data))
+        process = Export_Process(target=export_second_gaze, args=(should_terminate,frames_to_export,current_frame, rec_dir,user_dir,self.g_pool.min_data_confidence,start_frame,end_frame,plugins,out_file_path,self.g_pool.pupil_data)) #(A)
         self.new_export = process
-
 
     def launch_export(self, new_export):
         logger.debug("Starting export as new process %s" %new_export)

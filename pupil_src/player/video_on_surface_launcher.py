@@ -17,7 +17,16 @@ from pyglui import ui
 import logging
 logger = logging.getLogger(__name__)
 from ctypes import c_bool, c_int
-from exporter import export
+#from exporter import export
+
+#(A)
+#from surface_tracker import Surface_Tracker
+#from square_marker_detect import draw_markers,m_marker_to_screen
+#from calibration_routines.camera_intrinsics_estimation import load_camera_calibration
+#from offline_reference_surface import Offline_Reference_Surface
+from offline_surface_tracker_with_export import Offline_Surface_Tracker_With_Export #(A)
+from exporter_surface import export_surface, Global_Container #(A)
+#from math import sqrt
 
 class Export_Process(mp.Process):
     """small aditions to the process class"""
@@ -61,7 +70,7 @@ def avoid_overwrite(out_file_path):
     return out_file_path
 
 
-class Video_Export_Launcher(Plugin):
+class Video_On_Surface_Launcher(Plugin): #(A)
     """docstring for Video_Export_Launcher
     this plugin can export the video in a seperate process using exporter
     """
@@ -133,7 +142,7 @@ class Video_Export_Launcher(Plugin):
         plugins = self.g_pool.plugins.get_initializers()
 
         out_file_path=verify_out_file_path(self.rec_name,export_dir)
-        process = Export_Process(target=export, args=(should_terminate,frames_to_export,current_frame, rec_dir,user_dir,self.g_pool.min_data_confidence,start_frame,end_frame,plugins,out_file_path,self.g_pool.pupil_data))
+        process = Export_Process(target=export_surface, args=(should_terminate,frames_to_export,current_frame, rec_dir,user_dir,self.g_pool.min_data_confidence,start_frame,end_frame,plugins,out_file_path,self.g_pool.pupil_data)) #(A)
         self.new_export = process
 
 

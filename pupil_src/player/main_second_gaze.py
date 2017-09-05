@@ -7,12 +7,14 @@ Distributed under the terms of the GNU
 Lesser General Public License (LGPL v3.0).
 See COPYING and COPYING.LESSER for license details.
 ---------------------------------------------------------------------------~(*)
+This version uses previously exported on-surface coordinates for the gaze, thus it allows to add the second gaze on the same surface #(A)
 '''
 
 import sys
 import os
 import platform
 import errno
+import csv #(A)
 from glob import glob
 from copy import deepcopy
 from time import time
@@ -74,15 +76,16 @@ from vis_polyline import Vis_Polyline
 from vis_light_points import Vis_Light_Points
 from vis_watermark import Vis_Watermark
 from vis_fixation import Vis_Fixation
-from vis_scan_path import Vis_Scan_Path
+from vis_scan_path_sec_gaze import Vis_Scan_Path
 from vis_eye_video_overlay import Vis_Eye_Video_Overlay
 from seek_bar import Seek_Bar
 from trim_marks import Trim_Marks
-from video_export_launcher import Video_Export_Launcher
+from video_export_launcher_sec_gaze import Video_Export_Launcher #(A)
+#from video_export_launcher import Video_Export_Launcher #(A)
 from offline_surface_tracker import Offline_Surface_Tracker
 from marker_auto_trim_marks import Marker_Auto_Trim_Marks
 from fixation_detector import Gaze_Position_2D_Fixation_Detector, Pupil_Angle_3D_Fixation_Detector
-from manual_gaze_correction import Manual_Gaze_Correction
+from manual_second_gaze_correction import Manual_Gaze_Correction
 from batch_exporter import Batch_Exporter
 from log_display import Log_Display
 from annotations import Annotation_Player
@@ -212,6 +215,7 @@ def session(rec_dir):
     video_path = [f for f in glob(os.path.join(rec_dir, "world.*")) if f[-3:] in ('mp4', 'mkv', 'avi')][0]
     timestamps_path = os.path.join(rec_dir, "world_timestamps.npy")
     pupil_data_path = os.path.join(rec_dir, "pupil_data")
+    surface_pupil_data_path = os.path.join(rec_dir, "surface_pupil_data.csv") #(A)
 
     meta_info = load_meta_info(rec_dir)
     app_version = get_version(version_file)
@@ -247,10 +251,55 @@ def session(rec_dir):
         g_pool.gui_user_scale = new_scale
         on_resize(main_window, *glfwGetFramebufferSize(main_window))
 
+    #load gaze positions on surface from prepeared file surface_pupil_data.csv. surface_pupil_data = timestamp, norm_x, norm_y #(A)
+    surface_pupil_file = open(surface_pupil_data_path)
+    surface_pupil_list = []
+    for row in csv.reader(surface_pupil_file):
+        surface_pupil_list.append(row[2:5]) 
+    surface_pupil_file.close()
+
     # load pupil_positions, gaze_positions
     pupil_data = load_object(pupil_data_path)
     pupil_list = pupil_data['pupil_positions']
     gaze_list = pupil_data['gaze_positions']
+
+    # change information about gaze position from original to surface coordinates #(A)
+    surface_gaze_list=[]
+    original_ind=0
+    #gaze_timestamps=deepcopy(gaze_list['timestamp'])
+    #surface_gaze_by_timestamp = correlate_data(surface_gaze_list, gaze_timestamps) #(A)
+    for surface_ind in range (1,len(surface_pupil_list)): #starting from 1 because the first string consist of varaibles names
+        
+        surface_gaze_sample=deepcopy(gaze_list[original_ind])
+        print ('new sample')
+        print('surface  timestamp', surface_pupil_list[surface_ind][0])
+
+        #The following protects from missed timestamps in exported gazes on surface (in this case we will put (0,0) as gaze coordinates)
+        while float(surface_gaze_sample['timestamp'])!=float(surface_pupil_list[surface_ind][0]):
+            if original_ind+1<len(gaze_list):
+                print('zerodata timpstamp', surface_gaze_sample['timestamp'])
+                surface_gaze_sample['norm_pos']=(0, 0)
+                surface_gaze_list.append(surface_gaze_sample)
+                original_ind=original_ind+1
+                surface_gaze_sample=deepcopy(gaze_list[original_ind])
+            else:
+                break
+        else:
+            #We will change only coordinates and timestamps 
+            surface_gaze_sample['norm_pos']=(float (surface_pupil_list[surface_ind][1]), float (surface_pupil_list[surface_ind][2]))
+            surface_gaze_sample['timestamp']=(float (surface_pupil_list[surface_ind][0]))
+                #to check that coordinates were replaced correctly according to timestamp:
+            print('original timpstamp', surface_gaze_sample['timestamp'])
+            original_ind=original_ind+1
+            
+            #elif stamp+1<len(surface_pupil_data):
+                #   surface_gaze_stamp['norm_pos']=(0, 0)
+                #surface_gaze_stamp['timestamp']=surface_gaze_stamp['timestamp'] 
+            #    print('zerdata  timestamp', surface_pupil_data[stamp+1][0])
+
+            surface_gaze_list.append(surface_gaze_sample)
+
+
     g_pool.pupil_data = pupil_data
     g_pool.binocular = meta_info.get('Eye Mode', 'monocular') == 'binocular'
     g_pool.version = app_version
@@ -263,7 +312,7 @@ def session(rec_dir):
     g_pool.meta_info = meta_info
     g_pool.min_data_confidence = session_settings.get('min_data_confidence', 0.6)
     g_pool.pupil_positions_by_frame = correlate_data(pupil_list, g_pool.timestamps)
-    g_pool.gaze_positions_by_frame = correlate_data(gaze_list, g_pool.timestamps)
+    g_pool.gaze_positions_by_frame = correlate_data(surface_gaze_list, g_pool.timestamps) #(A)
     g_pool.fixations_by_frame = [[] for x in g_pool.timestamps]  # populated by the fixation detector plugin
 
     def next_frame(_):
@@ -467,10 +516,6 @@ def session(rec_dir):
         # new positons we make a deepcopy just like the image is a copy.
         events['gaze_positions'] = deepcopy(g_pool.gaze_positions_by_frame[frame.index])
         events['pupil_positions'] = deepcopy(g_pool.pupil_positions_by_frame[frame.index])
-        print(frame.timestamp, frame.index) #(A)
-        
-        #for p in events['pupil_positions']: #(A)
-        #    print(p['timestamp'], p['index']) #(A)
 
         if update_graph:
             # update performace graphs

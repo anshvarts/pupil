@@ -18,10 +18,10 @@ from pyglui import ui
 
 from methods import denormalize
 
-class Vis_Circle(Plugin):
+class Vis_Circle2(Plugin):
     uniqueness = "not_unique"
 
-    def __init__(self, g_pool,radius=20,color=(0.0,0.7,0.25,0.2),thickness=2,fill=True):
+    def __init__(self, g_pool,radius=5,color=(1.0,1.0,0.0,1.0),thickness=2,fill=True):
         super().__init__(g_pool)
         self.order = .9
 
@@ -42,7 +42,7 @@ class Vis_Circle(Plugin):
         else:
             thickness = self.thickness
 
-        pts = [denormalize(pt['norm_pos'],frame.img.shape[:-1][::-1],flip_y=True) for pt in events.get('gaze_positions',[]) if pt['confidence']>=self.g_pool.min_data_confidence]
+        pts = [denormalize(pt['norm_pos'],frame.img.shape[:-1][::-1],flip_y=True) for pt in events.get('gaze_positions2',[]) if pt['confidence']>=self.g_pool.min_data_confidence]
         #for pt in events.get('gaze_positions',[]):
         #    if pt['confidence']>=self.g_pool.min_data_confidence:
         #        print(pt['timestamp'], pt['index'], pt['norm_pos']) #(A)
@@ -52,7 +52,7 @@ class Vis_Circle(Plugin):
 
     def init_gui(self):
         # initialize the menu
-        self.menu = ui.Scrolling_Menu('Gaze Circle')
+        self.menu = ui.Scrolling_Menu('Gaze Circle2')
         # add menu to the window
         self.g_pool.gui.append(self.menu)
         self.menu.append(ui.Button('Close',self.unset_alive))
