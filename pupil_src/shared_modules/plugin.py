@@ -58,17 +58,6 @@ class Plugin(object):
         If you plan to update data inplace, note that this will affect all plugins executed after you.
         Use self.order to deal with this appropriately
         '''
-        if not hasattr(self, '_warn_once'):
-            depr_warn = "{}: Update will be deprecated soon. Use 'recent_events instead.'"
-            logger.warning(depr_warn.format(self.__class__.__name__))
-            self._warn_once = True
-        if 'frame' in events:
-            self.update(events['frame'], events)
-
-    def update(self, frame=None, events={}):
-        """
-        deprecated use revent events instead
-        """
         pass
 
     def gl_display(self):
@@ -79,7 +68,35 @@ class Plugin(object):
 
     def on_click(self, pos, button, action):
         """
-        Gets called when the user clicks in the window screen
+        Gets called when the user clicks in the window screen and the event has
+        not been consumed by the GUI.
+        """
+        pass
+
+    def on_key(self, key, scancode, action, mods):
+        """
+        Gets called on key events that were not consumed by the GUI.
+
+        See http://www.glfw.org/docs/latest/input_guide.html#input_key for
+        more information key events.
+        """
+        pass
+
+    def on_char(self, character):
+        """
+        Gets called on char events that were not consumed by the GUI.
+
+        See http://www.glfw.org/docs/latest/input_guide.html#input_char for
+        more information char events.
+        """
+        pass
+
+    def on_drop(self, paths):
+        """
+        Gets called on dropped paths of files and/or directories on the window.
+
+        See http://www.glfw.org/docs/latest/input_guide.html#path_drop for
+        more information.
         """
         pass
 
@@ -145,10 +162,10 @@ class Plugin(object):
 
         You may add more fields as you like.
 
-        All notifications must be serializable
+        All notifications must be serializable by msgpack.
 
         """
-        if self.g_pool.app in ('player', 'exporter'):
+        if self.g_pool.app ==  'exporter':
             if notification.get('delay', 0):
                 notification['_notify_time_'] = time()+notification['delay']
                 self.g_pool.delayed_notifications[notification['subject']] = notification
@@ -322,3 +339,16 @@ def import_runtime_plugins(plugin_dir):
             except Exception as e:
                 logger.warning("Failed to load '{}'. Reason: '{}' ".format(d, e))
     return runtime_plugins
+
+
+# Base plugin definitons
+class Visualizer_Plugin_Base(Plugin):
+    pass
+
+
+class Analysis_Plugin_Base(Plugin):
+    pass
+
+
+class Producer_Plugin_Base(Plugin):
+    pass

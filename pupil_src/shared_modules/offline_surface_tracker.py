@@ -13,7 +13,6 @@ import sys, os
 import cv2
 import numpy as np
 import csv
-import multiprocessing as mp
 
 from ctypes import c_bool
 
@@ -27,19 +26,24 @@ from glfw import *
 from pyglui import ui
 from pyglui.cygl.utils import *
 
-from plugin import Plugin
+from plugin import Analysis_Plugin_Base
 #logging
 import logging
 logger = logging.getLogger(__name__)
 
 from surface_tracker import Surface_Tracker
-from square_marker_detect import draw_markers,m_marker_to_screen
-from calibration_routines.camera_intrinsics_estimation import load_camera_calibration
+from square_marker_detect import draw_markers, m_marker_to_screen
 from offline_reference_surface import Offline_Reference_Surface
-from math import sqrt
+
+import multiprocessing
+import platform
+if platform.system() == 'Darwin':
+    mp = multiprocessing.get_context("fork")
+else:
+    mp = multiprocessing.get_context()
 
 
-class Offline_Surface_Tracker(Surface_Tracker):
+class Offline_Surface_Tracker(Surface_Tracker, Analysis_Plugin_Base):
     """
     Special version of surface tracker for use with videofile source.
     It uses a seperate process to search all frames in the world video file for markers.
@@ -54,15 +58,12 @@ class Offline_Surface_Tracker(Surface_Tracker):
         self.order = .2
         self.marker_cache_version = 2
         self.min_marker_perimeter_cacher = 20  #find even super small markers. The surface locater will filter using min_marker_perimeter
-        if g_pool.app == 'capture':
-           raise Exception('For Player only.')
 
         self.load_marker_cache()
         self.init_marker_cacher()
         for s in self.surfaces:
-            s.init_cache(self.cache,self.camera_calibration,self.min_marker_perimeter,self.min_id_confidence)
+            s.init_cache(self.cache,self.min_marker_perimeter,self.min_id_confidence)
         self.recalculate()
-
 
     def load_marker_cache(self):
         #check if marker cache is available from last session
@@ -92,10 +93,10 @@ class Offline_Surface_Tracker(Surface_Tracker):
         self.surface_definitions = Persistent_Dict(os.path.join(self.g_pool.rec_dir,'surface_definitions'))
         if self.surface_definitions.get('offline_square_marker_surfaces',[]) != []:
             logger.debug("Found ref surfaces defined or copied in previous session.")
-            self.surfaces = [Offline_Reference_Surface(self.g_pool,saved_definition=d) for d in self.surface_definitions.get('offline_square_marker_surfaces',[])]
+            self.surfaces = [Offline_Reference_Surface(self.g_pool, saved_definition=d) for d in self.surface_definitions.get('offline_square_marker_surfaces',[])]
         elif self.surface_definitions.get('realtime_square_marker_surfaces',[]) != []:
             logger.debug("Did not find ref surfaces def created or used by the user in player from earlier session. Loading surfaces defined during capture.")
-            self.surfaces = [Offline_Reference_Surface(self.g_pool,saved_definition=d) for d in self.surface_definitions.get('realtime_square_marker_surfaces',[])]
+            self.surfaces = [Offline_Reference_Surface(self.g_pool, saved_definition=d) for d in self.surface_definitions.get('realtime_square_marker_surfaces',[])]
         else:
             logger.debug("No surface defs found. Please define using GUI.")
             self.surfaces = []
@@ -170,7 +171,7 @@ class Offline_Surface_Tracker(Surface_Tracker):
         elif notification['subject'] == 'min_marker_perimeter_changed':
             logger.info('Min marker perimeter adjusted. Re-detecting surfaces.')
             self.invalidate_surface_caches()
-        elif notification['subject'] is "should_export":
+        elif notification['subject'] == "should_export":
             self.save_surface_statsics_to_file(notification['range'],notification['export_dir'])
 
 
@@ -231,7 +232,7 @@ class Offline_Surface_Tracker(Surface_Tracker):
         self.update_marker_cache()
         # self.markers = [m for m in self.cache[frame.index] if m['perimeter'>=self.min_marker_perimeter]
         self.markers = self.cache[frame.index]
-        if self.markers == False:
+        if self.markers is False:
             self.markers = []
             self.seek_marker_cacher(frame.index) # tell precacher that it better have every thing from here on analyzed
 
@@ -240,7 +241,7 @@ class Offline_Surface_Tracker(Surface_Tracker):
         # locate surfaces
         for s in self.surfaces:
             if not s.locate_from_cache(frame.index):
-                s.locate(self.markers,self.camera_calibration,self.min_marker_perimeter,self.min_id_confidence)
+                s.locate(self.markers,self.min_marker_perimeter,self.min_id_confidence)
             if s.detected:
                 events['surfaces'].append({'name':s.name,'uid':s.uid,'m_to_screen':s.m_to_screen.tolist(),'m_from_screen':s.m_from_screen.tolist(),'gaze_on_srf': s.gaze_on_srf, 'timestamp':frame.timestamp,'camera_pose_3d':s.camera_pose_3d.tolist() if s.camera_pose_3d is not None else None})
 
@@ -261,7 +262,7 @@ class Offline_Surface_Tracker(Surface_Tracker):
                 # update srf with no or invald cache:
                 for s in self.surfaces:
                     if s.cache == None:
-                        s.init_cache(self.cache,self.camera_calibration,self.min_marker_perimeter,self.min_id_confidence)
+                        s.init_cache(self.cache,self.min_marker_perimeter,self.min_id_confidence)
                         self.notify_all({'subject':'surfaces_changed','delay':1})
 
 
@@ -280,13 +281,12 @@ class Offline_Surface_Tracker(Surface_Tracker):
 
     def init_marker_cacher(self):
         from marker_detector_cacher import fill_cache
-        visited_list = [False if x == False else True for x in self.cache]
+        visited_list = [False if x is False else True for x in self.cache]
         video_file_path =  self.g_pool.capture.source_path
-        timestamps = self.g_pool.capture.timestamps
         self.cache_queue = mp.Queue()
         self.cacher_seek_idx = mp.Value('i',0)
         self.cacher_run = mp.Value(c_bool,True)
-        self.cacher = mp.Process(target=fill_cache, args=(visited_list,video_file_path,timestamps,self.cache_queue,self.cacher_seek_idx,self.cacher_run,self.min_marker_perimeter_cacher,self.invert_image))
+        self.cacher = mp.Process(target=fill_cache, args=(visited_list,video_file_path,self.cache_queue,self.cacher_seek_idx,self.cacher_run,self.min_marker_perimeter_cacher,self.invert_image))
         self.cacher.start()
 
     def update_marker_cache(self):
@@ -294,8 +294,9 @@ class Offline_Surface_Tracker(Surface_Tracker):
             idx,c_m = self.cache_queue.get()
             self.cache.update(idx,c_m)
             for s in self.surfaces:
-                s.update_cache(self.cache,camera_calibration=self.camera_calibration,min_marker_perimeter=self.min_marker_perimeter,min_id_confidence=self.min_id_confidence,idx=idx)
-            if self.cacher_run.value == False:
+                s.update_cache(self.cache, min_marker_perimeter=self.min_marker_perimeter,
+                               min_id_confidence=self.min_id_confidence, idx=idx)
+            if self.cacher_run.value is False:
                 self.recalculate()
 
     def seek_marker_cacher(self,idx):
@@ -316,10 +317,6 @@ class Offline_Surface_Tracker(Surface_Tracker):
         self.gl_display_cache_bars()
 
         super().gl_display()
-
-        if self.mode == "Show Heatmaps":
-            for s in  self.surfaces:
-                s.gl_display_heatmap()
         if self.mode == "Show Metrics":
             #todo: draw a backdrop to represent the gaze that is not on any surface
             for s in self.surfaces:
@@ -397,9 +394,9 @@ class Offline_Surface_Tracker(Surface_Tracker):
 
         """
         metrics_dir = os.path.join(export_dir,'surfaces')
-        section = export_range
-        in_mark = export_range.start
-        out_mark = export_range.stop
+        section = slice(*export_range)
+        in_mark = section.start
+        out_mark = section.stop
         logger.info("exporting metrics to {}".format(metrics_dir))
         if os.path.isdir(metrics_dir):
             logger.info("Will overwrite previous export for this section")

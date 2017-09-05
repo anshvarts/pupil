@@ -6,7 +6,6 @@ import platform, sys, os, os.path, numpy, ntpath,glob
 av_hidden_imports = ['av.format','av.packet','av.buffer','av.bytesource','av.frame','av.stream','av.descriptor','av.plane','av.audio.plane','av.container.streams','av.dictionary', 'av.audio.stream','av.subtitles','av.subtitles.stream','av.subtitles.subtitle','av.video.reformatter','av.video.plane','av.option']
 pyglui_hidden_imports = ['pyglui.pyfontstash.fontstash','pyglui.cygl.shader','pyglui.cygl.utils']
 
-
 from pyglui import ui
 
 if platform.system() == 'Darwin':
@@ -14,12 +13,12 @@ if platform.system() == 'Darwin':
     from version import dpkg_deb_version
     del sys.path[-1]
 
-    a = Analysis(['../../pupil_src/capture/main.py'],
+    a = Analysis(['../../pupil_src/main.py'],
                  pathex=['../../pupil_src/shared_modules/'],
                  hiddenimports=[]+av_hidden_imports+pyglui_hidden_imports,
                  hookspath=None,
-                 runtime_hooks=None,
-                 excludes=['matplotlib'])
+                 runtime_hooks=['../rthook_multiprocessing.py'],
+                 excludes=['matplotlib','pyrealsense'])
     pyz = PYZ(a.pure)
     exe = EXE(pyz,
               a.scripts,
@@ -55,7 +54,7 @@ if platform.system() == 'Darwin':
 
 
 elif platform.system() == 'Linux':
-    a = Analysis(['../../pupil_src/capture/main.py'],
+    a = Analysis(['../../pupil_src/main.py'],
                  pathex=['../../pupil_src/shared_modules/'],
                  hiddenimports=[]+av_hidden_imports+pyglui_hidden_imports,
                  hookspath=None,
@@ -130,7 +129,7 @@ elif platform.system() == 'Windows':
         scipy_imports += ['scipy.integrate._ode', 'scipy.integrate.quadrature', 'scipy.integrate.odepack', 'scipy.integrate._odepack', 'scipy.integrate.quadpack', 'scipy.integrate._quadpack']
         scipy_imports += ['scipy.integrate.vode', 'scipy.integrate.lsoda', 'scipy.integrate._dop', 'scipy.special._ufuncs', 'scipy.special._ufuncs_cxx']
 
-        a = Analysis(['../../pupil_src/capture/main.py'],
+        a = Analysis(['../../pupil_src/main.py'],
                      pathex=['../../pupil_src/shared_modules/', '../../pupil_external'],
                      binaries=None,
                      datas=None,
@@ -157,6 +156,7 @@ elif platform.system() == 'Windows':
                        a.binaries,
                        a.zipfiles,
                        a.datas,
+                       [('PupilDrvInst.exe','../../pupil_external/PupilDrvInst.exe','BINARY')],
                        [('glfw3.dll','../../pupil_external/glfw3.dll','BINARY')],
                        [('OpenSans-Regular.ttf', os.path.join(package_path, 'pyglui/OpenSans-Regular.ttf'),'DATA')],
                        [('Roboto-Regular.ttf', os.path.join(package_path, 'pyglui/Roboto-Regular.ttf'),'DATA')],

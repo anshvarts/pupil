@@ -11,7 +11,7 @@ See COPYING and COPYING.LESSER for license details.
 import os
 import csv
 from pyglui import ui
-from plugin import Plugin
+from plugin import Plugin, Analysis_Plugin_Base
 from file_methods import load_object,save_object
 from itertools import chain
 
@@ -25,6 +25,7 @@ from pyglui.ui import get_opensans_font_path
 #logging
 import logging
 logger = logging.getLogger(__name__)
+
 
 class Annotation_Capture(Plugin):
     """Describe your plugin here
@@ -56,7 +57,6 @@ class Annotation_Capture(Plugin):
         self.menu.append(self.sub_menu)
         self.update_buttons()
 
-
     def update_buttons(self):
         for b in self.buttons:
             self.g_pool.quickbar.remove(b)
@@ -76,8 +76,6 @@ class Annotation_Capture(Plugin):
             self.buttons.append(thumb)
             self.g_pool.quickbar.append(thumb)
             self.sub_menu.append(ui.Button(e_name+" <"+hotkey+">",make_remove(e_name,hotkey)))
-
-
 
     def deinit_gui(self):
         if self.menu:
@@ -105,7 +103,6 @@ class Annotation_Capture(Plugin):
         notification = {'subject':'annotation','label':annotation_label,'timestamp':t,'duration':0.0,'source':'local','record':True} #you may add more field to this dictionary if you want.
         self.notify_all(notification)
 
-
     def get_init_dict(self):
         return {'annotations':self.annotations}
 
@@ -117,7 +114,7 @@ class Annotation_Capture(Plugin):
         self.deinit_gui()
 
 
-class Annotation_Player(Annotation_Capture):
+class Annotation_Player(Annotation_Capture, Analysis_Plugin_Base):
     """Describe your plugin here
     View,edit and add Annotations.
     """
@@ -159,9 +156,12 @@ class Annotation_Player(Annotation_Capture):
         #lets make a menu entry in the sidebar
         self.menu = ui.Scrolling_Menu('view add edit annotations')
         self.g_pool.gui.append(self.menu)
-
         #add a button to close the plugin
         self.menu.append(ui.Button('close',self.close))
+
+        self.menu.append(ui.Info_Text("Annotations recorded with capture are displayed when this plugin is loaded. New annotations can be added with the interface below."))
+        self.menu.append(ui.Info_Text("If you want to revert annotations to the recorded state, stop player, delete the annotations file in the recording and reopen player."))
+
         self.menu.append(ui.Text_Input('new_annotation_name',self))
         self.menu.append(ui.Text_Input('new_annotation_hotkey',self))
         self.menu.append(ui.Button('add annotation type',self.add_annotation))
@@ -177,7 +177,6 @@ class Annotation_Player(Annotation_Capture):
         self.glfont.set_size(24)
         #self.glfont.set_color_float((0.2,0.5,0.9,1.0))
         self.glfont.set_align_string(v_align='center',h_align='middle')
-
 
     def on_window_resize(self,window,w,h):
         self.window_size = w,h
@@ -205,14 +204,13 @@ class Annotation_Player(Annotation_Capture):
             annotation['index']
         )
 
-
     def export_annotations(self,export_range,export_dir):
 
         if not self.annotations:
             logger.warning('No annotations in this recording nothing to export')
             return
 
-        annotations_in_section = chain(*self.annotations_by_frame[export_range])
+        annotations_in_section = chain(*self.annotations_by_frame[slice(*export_range)])
         annotations_in_section = list({a['index']: a for a in annotations_in_section}.values())  # remove duplicates
         annotations_in_section.sort(key=lambda a:a['index'])
 
@@ -223,8 +221,10 @@ class Annotation_Player(Annotation_Capture):
                 csv_writer.writerow(self.csv_representation_for_annotations(a))
             logger.info("Created 'annotations.csv' file.")
 
-
-    def update(self,frame,events):
+    def recent_events(self, events):
+        frame = events.get('frame')
+        if not frame:
+            return
         self.last_frame_ts = frame.timestamp
         if frame.index != self.current_frame:
             self.current_frame = frame.index
@@ -243,12 +243,11 @@ class Annotation_Player(Annotation_Capture):
             self.buttons = []
 
     def on_notify(self,notification):
-        if notification['subject'] is "should_export":
+        if notification['subject'] == "should_export":
             self.export_annotations(notification['range'],notification['export_dir'])
 
     def unset_alive(self):
         self.alive = False
-
 
     def gl_display(self):
         #TODO: implement this

@@ -47,7 +47,6 @@ class Manual_Marker_Calibration(Calibration_Plugin):
         self.sample_site = (-2,-2)
         self.counter = 0
         self.counter_max = 30
-        self.fixation_boost = 15
         self.markers = []
         self.world_size = None
 
@@ -56,58 +55,44 @@ class Manual_Marker_Calibration(Calibration_Plugin):
         self.auto_stop_max = 30
 
         self.menu = None
-        self.button = None
-
 
     def init_gui(self):
-
+        super().init_gui()
         self.info = ui.Info_Text("Calibrate gaze parameters using a handheld marker.")
         self.g_pool.calibration_menu.append(self.info)
 
         self.menu = ui.Growing_Menu('Controls')
         self.g_pool.calibration_menu.append(self.menu)
 
-        self.button = ui.Thumb('active',self,label='C',setter=self.toggle,hotkey='c')
-        self.button.on_color[:] = (.3,.2,1.,.9)
-        self.g_pool.quickbar.insert(0,self.button)
-
     def deinit_gui(self):
         if self.menu:
             self.g_pool.calibration_menu.remove(self.menu)
             self.g_pool.calibration_menu.remove(self.info)
             self.menu = None
-        if self.button:
-            self.g_pool.quickbar.remove(self.button)
-            self.button = None
-
-
-    def toggle(self,_=None):
-        if self.active:
-            self.notify_all({'subject':'calibration.should_stop'})
-        else:
-            self.notify_all({'subject':'calibration.should_start'})
-
+        super().deinit_gui()
 
     def start(self):
-        self.notify_all({'subject':'calibration.started'})
-        audio.say("Starting Calibration")
-        logger.info("Starting Calibration")
+        super().start()
+        audio.say("Starting {}".format(self.mode_pretty))
+        logger.info("Starting {}".format(self.mode_pretty))
         self.active = True
         self.ref_list = []
         self.pupil_list = []
 
-
     def stop(self):
-        self.notify_all({'subject':'calibration.stopped'})
-        audio.say("Stopping Calibration")
-        logger.info('Stopping Calibration')
+        audio.say("Stopping  {}".format(self.mode_pretty))
+        logger.info('Stopping  {}'.format(self.mode_pretty))
         self.screen_marker_state = 0
         self.active = False
-        #self.close_window()
+        # self.close_window()
         self.button.status_text = ''
-        finish_calibration(self.g_pool,self.pupil_list,self.ref_list)
+        if self.mode == 'calibration':
+            finish_calibration(self.g_pool, self.pupil_list, self.ref_list)
+        elif self.mode == 'accuracy_test':
+            self.finish_accuracy_test(self.pupil_list, self.ref_list)
+        super().stop()
 
-    def on_notify(self,notification):
+    def on_notify(self, notification):
         '''
         Reacts to notifications:
            ``calibration.should_start``: Starts the calibration procedure
@@ -145,15 +130,13 @@ class Manual_Marker_Calibration(Calibration_Plugin):
                 marker_pos = self.markers[0][0][0] #first marker innermost ellipse, pos
                 self.pos = normalize(marker_pos,(frame.width,frame.height),flip_y=True)
 
-
             else:
                 self.detected = False
-                self.pos = None #indicate that no reference is detected
-
+                self.pos = None  # indicate that no reference is detected
 
             # center dark or white?
             if self.detected:
-                second_ellipse =  self.markers[0][1]
+                second_ellipse = self.markers[0][1]
                 col_slice = int(second_ellipse[0][0]-second_ellipse[1][0]/2),int(second_ellipse[0][0]+second_ellipse[1][0]/2)
                 row_slice = int(second_ellipse[0][1]-second_ellipse[1][1]/2),int(second_ellipse[0][1]+second_ellipse[1][1]/2)
                 marker_gray = gray_img[slice(*row_slice),slice(*col_slice)]
@@ -161,9 +144,9 @@ class Manual_Marker_Calibration(Calibration_Plugin):
                 center = marker_gray[int(second_ellipse[1][1])//2, int(second_ellipse[1][0])//2]
                 rel_shade = center-avg
 
-                #auto_stop logic
+                # auto_stop logic
                 if rel_shade > 30:
-                    #bright marker center found
+                    # bright marker center found
                     self.auto_stop +=1
                     self.stop_marker_found = True
 
@@ -214,7 +197,7 @@ class Manual_Marker_Calibration(Calibration_Plugin):
                         ref["timestamp"] = frame.timestamp
                         self.ref_list.append(ref)
                         if events.get('fixations', []):
-                            self.counter -= self.fixation_boost
+                            self.counter -= 5
                         if self.counter <= 0:
                             #last sample before counter done and moving on
                             audio.tink()
